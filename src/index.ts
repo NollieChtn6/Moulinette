@@ -7,13 +7,38 @@ import { detectCover, isImage } from "./utils/images.js";
 import { cleanFolderName } from "./utils/naming.js";
 import "dotenv/config";
 
+/**
+ * Absolute path to the input directory
+ */
 const INPUT_DIR = path.resolve(process.env.INPUT_DIR || "input");
+
+/**
+ * Absolute path to the output directory
+ */
 const OUTPUT_DIR = path.resolve(process.env.OUTPUT_DIR || "output");
 
+/**
+ * Maximum width (in pixels) for resized images
+ */
 const MAX_WIDTH = Number.parseInt(process.env.MAX_WIDTH || "1400", 10);
+
+/**
+ * Image quality (0-100) for the output images
+ */
 const QUALITY = Number.parseInt(process.env.QUALITY || "80", 10);
 
-async function processFolder(folder: string) {
+/**
+ * Process a single folder of images.
+ *
+ * Steps:
+ * 1. Normalize folder name
+ * 2. Skip if already processed
+ * 3. Process images and generate JSON
+ *
+ * @param folder - Folder name inside the input directory
+ * @returns The processed folder name, or null if skipped
+ */
+async function processFolder(folder: string): Promise<string | null> {
   const rawName = path.basename(folder);
   const name = cleanFolderName(rawName);
 
@@ -92,7 +117,14 @@ async function processFolder(folder: string) {
   return name;
 }
 
-async function main() {
+/**
+ * Entry point of the script.
+ *
+ * - Scans all folders in the input directory
+ * - Processes each folder sequentially
+ * - Logs execution summary and duration
+ */
+async function main(): Promise<void> {
   const start = Date.now();
   console.log("🚀 Starting...\n");
 
