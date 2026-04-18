@@ -46,7 +46,7 @@
       "enabled": true,
       "indentStyle": "space",
       "indentWidth": 2,
-      "trailingCommas": "all"
+      "trailingCommas": "none"
     }
   },
   "vcs": {
