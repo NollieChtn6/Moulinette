@@ -1,10 +1,11 @@
 import path from "node:path";
 import fs from "fs-extra";
 import sharp from "sharp";
-import type { ImageEntry } from "./@types/types.js";
+import type { ImageEntry, ProcessMode } from "./@types/types.js";
 import { getFolders } from "./utils/fs.js";
 import { detectCover, isImage } from "./utils/images.js";
 import { cleanFolderName } from "./utils/naming.js";
+import { askMode } from "./utils/prompt.js";
 import "dotenv/config";
 
 /**
@@ -28,17 +29,49 @@ const MAX_WIDTH = Number.parseInt(process.env.MAX_WIDTH || "1400", 10);
 const QUALITY = Number.parseInt(process.env.QUALITY || "80", 10);
 
 /**
+ * Converts and renames a single image, saving it to the output folder.
+ *
+ * @param inputFile - Absolute path to the source image
+ * @param outputPath - Absolute path to the destination folder
+ * @param name - Cleaned folder name (used as the file prefix)
+ * @param index - Position of the image in the sequence
+ * @returns The generated filename
+ */
+async function convertImage(
+  inputFile: string,
+  outputPath: string,
+  name: string,
+  index: number,
+): Promise<string> {
+  const fileName = `${name}-photo-${String(index).padStart(3, "0")}.webp`;
+  const outputFile = path.join(outputPath, fileName);
+
+  await sharp(inputFile)
+    .resize({ width: MAX_WIDTH, withoutEnlargement: true })
+    .webp({ quality: QUALITY })
+    .toFile(outputFile);
+
+  const stats = await fs.stat(outputFile);
+
+  console.log(`💾​ Saved: ${fileName} (${(stats.size / 1024).toFixed(1)} KB)`);
+
+  return fileName;
+}
+
+/**
  * Process a single folder of images.
  *
  * Steps:
  * 1. Normalize folder name
  * 2. Skip if already processed
- * 3. Process images and generate JSON
+ * 3. Convert and rename images
+ * 4. In "gallery" mode: detect the cover, order it first, and generate a JSON manifest
  *
  * @param folder - Folder name inside the input directory
+ * @param mode - Processing mode selected by the user
  * @returns The processed folder name, or null if skipped
  */
-async function processFolder(folder: string): Promise<string | null> {
+async function processFolder(folder: string, mode: ProcessMode): Promise<string | null> {
   const rawName = path.basename(folder);
   const name = cleanFolderName(rawName);
 
@@ -65,9 +98,12 @@ async function processFolder(folder: string): Promise<string | null> {
     return null;
   }
 
-  const coverFile = detectCover(files);
+  let orderedFiles = files;
 
-  const orderedFiles = coverFile ? [coverFile, ...files.filter((f) => f !== coverFile)] : files;
+  if (mode === "gallery") {
+    const coverFile = detectCover(files);
+    orderedFiles = coverFile ? [coverFile, ...files.filter((f) => f !== coverFile)] : files;
+  }
 
   const images: ImageEntry[] = [];
 
@@ -75,44 +111,37 @@ async function processFolder(folder: string): Promise<string | null> {
 
   for (const file of orderedFiles) {
     const inputFile = path.join(inputPath, file);
+    const fileName = await convertImage(inputFile, outputPath, name, index);
 
-    const fileName = `${name}-photo-${String(index).padStart(3, "0")}.webp`;
-    const outputFile = path.join(outputPath, fileName);
-
-    await sharp(inputFile)
-      .resize({ width: MAX_WIDTH, withoutEnlargement: true })
-      .webp({ quality: QUALITY })
-      .toFile(outputFile);
-
-    const stats = await fs.stat(outputFile);
-
-    console.log(`💾​ Saved: ${fileName} (${(stats.size / 1024).toFixed(1)} KB)`);
-
-    images.push({
-      url: `${process.env.BASE_URL}/${name}/${fileName}`,
-      alt: "",
-    });
+    if (mode === "gallery") {
+      images.push({
+        url: `${process.env.BASE_URL}/${name}/${fileName}`,
+        alt: "",
+      });
+    }
 
     index++;
   }
 
-  const jsonPath = path.join(outputPath, `${name}.json`);
+  if (mode === "gallery") {
+    const cover = images[0];
 
-  const cover = images[0];
+    if (!cover) {
+      console.log(`⚠️ No cover generated for ${name}`);
+      return null;
+    }
 
-  if (!cover) {
-    console.log(`⚠️ No cover generated for ${name}`);
-    return null;
+    const jsonPath = path.join(outputPath, `${name}.json`);
+    const json = {
+      slug: name,
+      cover: cover.url,
+      images,
+    };
+
+    await fs.writeJson(jsonPath, json, { spaces: 2 });
   }
-  const json = {
-    slug: name,
-    cover: cover.url,
-    images,
-  };
 
-  await fs.writeJson(jsonPath, json, { spaces: 2 });
-
-  console.log(`✅ Total images processed: ${images.length}`);
+  console.log(`✅ Total images processed: ${index}`);
 
   return name;
 }
@@ -120,13 +149,17 @@ async function processFolder(folder: string): Promise<string | null> {
 /**
  * Entry point of the script.
  *
+ * - Asks the user which processing mode to use
  * - Scans all folders in the input directory
  * - Processes each folder sequentially
  * - Logs execution summary and duration
  */
 async function main(): Promise<void> {
   const start = Date.now();
-  console.log("🚀 Starting...\n");
+
+  const mode = await askMode();
+
+  console.log(`\n🚀 Starting in "${mode}" mode...\n`);
 
   const folders = await getFolders(INPUT_DIR);
 
@@ -143,7 +176,7 @@ async function main(): Promise<void> {
 
   for (const folder of folders) {
     console.log(`\n🔍 Unpacking ${folder}`);
-    await processFolder(folder);
+    await processFolder(folder, mode);
   }
   const duration = ((Date.now() - start) / 1000).toFixed(2);
 
