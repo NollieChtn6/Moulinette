@@ -9,10 +9,36 @@ La **Magic Moulinette** est un petit outil simple pour traiter et optimiser des 
 - Traitement par dossiers
 - Conversion automatique en WebP
 - Redimensionnement des images (max width configurable)
-- Détection automatique de la cover
 - Renommage propre et uniforme des fichiers
-- Génération d’un fichier JSON prêt à l’emploi
 - Skip automatique des dossiers déjà traités
+- Deux modes de traitement au choix (sélection interactive au lancement) :
+  - **Galerie** : détection automatique de la cover + génération d'un fichier JSON prêt à l'emploi
+  - **Simple** : conversion et renommage uniquement, sans cover ni JSON
+
+## 🖼️ vs 🗂️ Modes de traitement
+
+Au lancement du script, un prompt interactif (en anglais) demande quel mode utiliser :
+
+```bash
+◆  Which mode do you want to use?
+│  ● 🖼️  Gallery  (Cover + JSON for a website)
+│  ○ 🗂️  Simple  (Conversion + renaming only)
+```
+
+### 🖼️ Mode Galerie
+
+Pensé pour alimenter un site (Astro, site statique, etc.) :
+
+- Si une image contient "cover" dans son nom, elle est placée en premier (`-photo-000`).
+- Un fichier `{slug}.json` est généré avec le `slug`, la `cover` et la liste des `images`.
+
+### 🗂️ Mode Simple
+
+Pensé pour un simple archivage/export de photos converties :
+
+- Aucune détection de cover : les fichiers sont traités dans l'ordre alphabétique.
+- Aucun fichier JSON n'est généré.
+- Les images sont converties, redimensionnées et renommées de la même façon que le mode Galerie, puis placées dans `output/`.
 
 ## 📂 Structure attendue
 
@@ -26,7 +52,7 @@ input/
     IMG_cover.jpg
 ```
 
-### Output
+### Output — mode Galerie
 
 ```bash
 output/
@@ -36,7 +62,16 @@ output/
     2026-04-01-my-folder.json
 ```
 
-### 📄 JSON généré
+### Output — mode Simple
+
+```bash
+output/
+  2026-04-01-my-folder/
+    2026-04-01-my-folder-photo-000.webp
+    2026-04-01-my-folder-photo-001.webp
+```
+
+### 📄 JSON généré (mode Galerie uniquement)
 
 ```json
 {
@@ -58,10 +93,11 @@ output/
 - Format recommandé : YYYY-MM-DD-nom-du-dossier.
 - Les suffixes _XXX_YYY sont automatiquement supprimés.
 
-### ⭐ Cover
+### ⭐ Cover (mode Galerie uniquement)
 
 - Si une image contient "cover" dans son nom, elle est utilisée comme couverture.
-- Par défaut, en l'absence de cover, c'est la première image qui est utilisée.
+- Par défaut, en l'absence de cover, c'est la première image (ordre alphabétique) qui est utilisée.
+- En mode Simple, cette détection n'est pas appliquée : les fichiers sont traités dans l'ordre alphabétique.
 
 ### 📸 Formats supportés
 
@@ -111,7 +147,13 @@ npm run dev
 ### 🧪 Exemple de sortie console
 
 ```bash
-🚀 Starting...
+┌  🌀 Magic Moulinette
+◆  Which mode do you want to use?
+│  ● 🖼️  Gallery  (Cover + JSON for a website)
+│  ○ 🗂️  Simple  (Conversion + renaming only)
+└
+
+🚀 Starting in "gallery" mode...
 
 📦 2 folders detected
 [
